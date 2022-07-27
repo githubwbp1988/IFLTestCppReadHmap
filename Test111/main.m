@@ -27,7 +27,7 @@ struct HMapHeader {
   uint32_t NumEntries;     // Number of entries in the string table.
   uint32_t NumBuckets;     // Number of buckets (always a power of 2).
   uint32_t MaxValueLength; // Length of longest result path (excluding nul).
-  struct HMapBucket buckets[8]; // An array of 'NumBuckets' HMapBucket objects follows this header.
+  struct HMapBucket *buckets; // An array of 'NumBuckets' HMapBucket objects follows this header.
   char *mString;                // Strings follow the buckets, at StringsOffset.
 };
 
@@ -50,6 +50,7 @@ void read_hmap(void) {
     // test_hmap/IFLTestSymbol-own-target-headers.hmap
     // test_hmap/IFLTestSymbol-project-headers.hmap
 //    char *path = "/Users/erlich/Developer/workspace/ios/test/test_symbol/Test111/HMap/Test111.build/Debug-macosx/Test111.build/Test111-project-headers.hmap";
+//    char *path = "/Users/erlich/Developer/workspace/ios/test/test_symbol/Test111/Test111/test_hmap/IFLTestApp-project-headers.hmap";
     char *path = "/Users/erlich/Developer/workspace/ios/test/test_symbol/Test111/Test111/test_hmap/Test111-project-headers.hmap";
     int file = open(path, O_RDONLY|O_CLOEXEC);
     if (file < 0) {
@@ -80,10 +81,12 @@ void read_hmap(void) {
     // HMapBucket 数组
     const void *buckets = raw + 24;
     // 长字符串
-    const void *string_table = raw + 24 + 8 + header->StringsOffset;
+//    const void *string_table = raw + 24 + header->StringsOffset;
+    // 理解错误，修正，原来 HMapHeader结构中的 StringsOffset 指的是 从结构体起始位置偏移，非buckets开始的偏移
+    const void *string_table = raw + header->StringsOffset;
 
     printf("buckets 初始化了: %i\n\n", NumBuckets);
-//    printf("长字符串：%s\n\n", string_table);
+//    printf("长字符串：%s\n\n", (const char *)string_table);
     
     int mBucketsCount = 0;
     for (uint32_t i = 0; i < NumBuckets; i++) {
@@ -91,8 +94,8 @@ void read_hmap(void) {
         bucket->Key = needsByteSwap ? ByteSwap_32(bucket->Key) : bucket->Key;
         bucket->Prefix = needsByteSwap ? ByteSwap_32(bucket->Prefix) : bucket->Prefix;
         bucket->Suffix = needsByteSwap ? ByteSwap_32(bucket->Suffix) : bucket->Suffix;
-        
-        if (bucket->Key == 0 && bucket->Prefix == 0 && bucket->Suffix == 0) {
+
+        if (bucket->Key == HMAP_EmptyBucketKey) {
             continue;
         }
         mBucketsCount++;
